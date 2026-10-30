@@ -1,0 +1,415 @@
+// ============================================================================
+// Exercise 4: Audio Processing in Scilab
+// ============================================================================
+clear;
+clc;
+close;
+
+disp("--- Exercise 4: Audio Processing in Scilab ---");
+
+// 1. Audio Generation / Synthesis
+Fs = 8000;              // Sampling frequency: 8000 Hz
+duration = 1.0;         // Duration: 1.0 second
+t = 0:(1/Fs):(duration - 1/Fs);
+
+// Synthesize a dual-tone audio signal (A4 = 440 Hz + A5 = 880 Hz)
+// with an exponential decaying amplitude envelope
+f1 = 440; 
+f2 = 880; 
+envelope = exp(-2 * t);
+signal_audio = envelope .* (0.6 * sin(2 * %pi * f1 * t) + 0.4 * sin(2 * %pi * f2 * t));
+
+// Normalize amplitude to [-1, 1]
+signal_audio = signal_audio / max(abs(signal_audio));
+
+// 2. Save audio to WAV file
+wav_filename = "synthesized_sound.wav";
+wavwrite(signal_audio, Fs, wav_filename);
+disp("Audio successfully written to file: " + wav_filename);
+
+// 3. Read audio back from WAV file
+[audio_data, Fs_read, bits] = wavread(wav_filename);
+disp("Audio file read back successfully:");
+disp("  - Sampling frequency: " + string(Fs_read) + " Hz");
+disp("  - Bit depth: " + string(bits) + " bits");
+disp("  - Number of samples: " + string(length(audio_data)));
+
+// 4. Frequency Spectrum Analysis using FFT
+N_fft = 2048;
+fft_spectrum = fft(audio_data(1:min(length(audio_data), N_fft)), -1);
+magnitude_spectrum = abs(fft_spectrum(1:(N_fft/2)));
+freq_axis = (0:(N_fft/2 - 1)) * (Fs_read / N_fft);
+
+// 5. Plotting Audio Waveform and Spectrum
+f = figure(1);
+clf(f);
+
+subplot(2, 1, 1);
+t_zoom_idx = find(t <= 0.05);
+plot(t(t_zoom_idx) * 1000, audio_data(t_zoom_idx), "b-", "LineWidth", 1.5);
+xgrid(1, 1, 10);
+title("Time Domain Waveform (Zoomed first 50 ms)");
+xlabel("Time (ms)");
+ylabel("Amplitude");
+
+subplot(2, 1, 2);
+plot(freq_axis, magnitude_spectrum, "r-", "LineWidth", 1.5);
+xgrid(1, 1, 10);
+title("Magnitude Spectrum via FFT (Peaks at 440 Hz and 880 Hz)");
+xlabel("Frequency (Hz)");
+ylabel("Magnitude");
+
+// Save figure
+xs2png(f, "ex4_audio_processing.png");
+disp("Audio analysis plot saved to ex4_audio_processing.png");
+
+// 6. Audio Playback Demonstration
+disp("Playing audio using playsnd()...");
+playsnd(audio_data, Fs_read);
+disp("Playback completed.");
+
+
+// ============================================================================
+// Exercise 5: Digital Image Processing Demonstration in Scilab
+// ============================================================================
+clear;
+clc;
+close;
+
+disp("--- Exercise 5: Image Processing Demonstration in Scilab ---");
+
+// 1. Synthesize a 200x200 8-bit test image with low contrast
+rows = 200;
+cols = 200;
+
+[X, Y] = meshgrid(1:cols, 1:rows);
+img_base = 50 + 60 * (X / cols) + 20 * sin(2 * %pi * Y / 100);
+
+center_x = 100; center_y = 100; radius = 40;
+mask_circle = ((X - center_x).^2 + (Y - center_y).^2) <= radius^2;
+img_base(mask_circle) = 140;
+img_base(30:70, 30:70) = 80;
+
+rand("normal");
+img = round(img_base + 5 * rand(rows, cols));
+img(img < 0) = 0;
+img(img > 255) = 255;
+
+disp("Synthesized 200x200 grayscale image with dynamic range [" + ...
+     string(min(img)) + ", " + string(max(img)) + "].");
+
+// ----------------------------------------------------------------------------
+// Task A: Histogram Display
+// ----------------------------------------------------------------------------
+gray_levels = 0:255;
+hist_original = zeros(1, 256);
+for i = 1:rows
+    for j = 1:cols
+        val = img(i, j);
+        hist_original(val + 1) = hist_original(val + 1) + 1;
+    end
+end
+
+// ----------------------------------------------------------------------------
+// Task B: Histogram Equalization
+// ----------------------------------------------------------------------------
+num_pixels = rows * cols;
+pdf_orig = hist_original / num_pixels;
+cdf_orig = cumsum(pdf_orig);
+T_mapping = round(255 * cdf_orig);
+
+img_equalized = zeros(rows, cols);
+for i = 1:rows
+    for j = 1:cols
+        val = img(i, j);
+        img_equalized(i, j) = T_mapping(val + 1);
+    end
+end
+
+hist_equalized = zeros(1, 256);
+for i = 1:rows
+    for j = 1:cols
+        val = img_equalized(i, j);
+        hist_equalized(val + 1) = hist_equalized(val + 1) + 1;
+    end
+end
+
+// ----------------------------------------------------------------------------
+// Task C: Image Blurring (Averaging Spatial Filter 5x5)
+// ----------------------------------------------------------------------------
+kernel_size = 5;
+pad = floor(kernel_size / 2);
+kernel = ones(kernel_size, kernel_size) / (kernel_size * kernel_size);
+
+img_blurred = zeros(rows, cols);
+for i = (pad + 1):(rows - pad)
+    for j = (pad + 1):(cols - pad)
+        neighborhood = img( (i - pad):(i + pad), (j - pad):(j + pad) );
+        img_blurred(i, j) = sum(neighborhood .* kernel);
+    end
+end
+img_blurred = round(img_blurred);
+
+// ----------------------------------------------------------------------------
+// Visualization & Comparison
+// ----------------------------------------------------------------------------
+f = figure(2);
+clf(f);
+
+subplot(3, 2, 1);
+Matplot(img);
+title("Original Image (Low Contrast)");
+
+subplot(3, 2, 2);
+plot2d3(gray_levels, hist_original, 2);
+xgrid(1, 1, 10);
+title("Original Image Histogram");
+xlabel("Gray Level (0-255)"); ylabel("Pixel Count");
+
+subplot(3, 2, 3);
+Matplot(img_equalized);
+title("Histogram Equalized Image (Enhanced Contrast)");
+
+subplot(3, 2, 4);
+plot2d3(gray_levels, hist_equalized, 5);
+xgrid(1, 1, 10);
+title("Equalized Histogram (Flattened/Spread)");
+xlabel("Gray Level (0-255)"); ylabel("Pixel Count");
+
+subplot(3, 2, 5);
+Matplot(img_blurred);
+title("Blurred Image (5x5 Averaging Filter)");
+
+subplot(3, 2, 6);
+img_diff = abs(img - img_blurred);
+Matplot(img_diff * 3);
+title("High Frequency Residual / Edges (|Original - Blurred| x 3)");
+
+// Save figure
+xs2png(f, "ex5_image_processing.png");
+disp("Image processing plot saved to ex5_image_processing.png");
+
+
+// ============================================================================
+// Exercise 6: Linear Discrete Convolution & Energy Analysis
+// ============================================================================
+clear;
+clc;
+close;
+
+disp("--- Exercise 6: Linear Convolution & Energy Analysis ---");
+
+// 1. Define given discrete-time signals
+// x(n) = [1, 2, -3, 2, 1], origin at n = 0
+x = [1, 2, -3, 2, 1];
+nx = 0:(length(x) - 1);
+
+// h(n) = [1, 0, -1], origin at n = 0
+h = [1, 0, -1];
+nh = 0:(length(h) - 1);
+
+Nx = length(x);
+Nh = length(h);
+Ny = Nx + Nh - 1;
+ny = 0:(Ny - 1);
+
+// ----------------------------------------------------------------------------
+// Method 1: Folding and Shifting
+// y(n) = sum_{k} h(k) * x(n - k)
+// ----------------------------------------------------------------------------
+y_fold = zeros(1, Ny);
+for n = 0:(Ny - 1)
+    acc = 0;
+    for k = 0:(Nh - 1)
+        shift_idx = n - k;
+        if (shift_idx >= 0 & shift_idx < Nx) then
+            acc = acc + h(k + 1) * x(shift_idx + 1);
+        end
+    end
+    y_fold(n + 1) = acc;
+end
+
+disp("y(n) using Folding and Shifting method:");
+disp(y_fold);
+
+// ----------------------------------------------------------------------------
+// Method 2: Matrix Method (Toeplitz Convolution Matrix)
+// ----------------------------------------------------------------------------
+X_mat = zeros(Ny, Nh);
+for col = 1:Nh
+    X_mat(col:(col + Nx - 1), col) = x(:);
+end
+
+y_mat = (X_mat * (h(:)))';
+
+disp("Convolution Matrix X:");
+disp(X_mat);
+disp("y(n) using Toeplitz Matrix method:");
+disp(y_mat);
+
+// Check equivalence with built-in convol()
+y_builtin = convol(x, h);
+disp("Built-in convol(x, h):");
+disp(y_builtin);
+
+// ----------------------------------------------------------------------------
+// Energy Calculation
+// ----------------------------------------------------------------------------
+Ex_total = sum(x .^ 2);
+Ey_total = sum(y_mat .^ 2);
+disp("Total Energy of x(n): " + string(Ex_total));
+disp("Total Energy of y(n): " + string(Ey_total));
+
+Ex_cum = cumsum(x .^ 2);
+Ey_cum = cumsum(y_mat .^ 2);
+
+// ----------------------------------------------------------------------------
+// Plotting: x(n), y(n) and Energy in the same figure
+// ----------------------------------------------------------------------------
+f = figure(3);
+clf(f);
+
+subplot(2, 2, 1);
+plot2d3(nx, x, 2);
+plot(nx, x, "b.");
+xgrid(1, 1, 10);
+title("Input Signal x(n) (Total Energy = " + string(Ex_total) + ")");
+xlabel("n"); ylabel("x(n)");
+
+subplot(2, 2, 2);
+plot2d3(ny, y_mat, 5);
+plot(ny, y_mat, "r.");
+xgrid(1, 1, 10);
+title("Linear Convolution y(n) (Total Energy = " + string(Ey_total) + ")");
+xlabel("n"); ylabel("y(n)");
+
+subplot(2, 2, 3);
+plot2d3(nx, x .^ 2, 2);
+plot(nx, x .^ 2, "b.");
+plot2d3(ny, y_mat .^ 2, 5);
+plot(ny, y_mat .^ 2, "r.");
+xgrid(1, 1, 10);
+title("Instantaneous Energy |x(n)|^2 and |y(n)|^2");
+xlabel("n"); ylabel("Energy");
+legend(["|x(n)|^2", "", "|y(n)|^2", ""], opt=1);
+
+subplot(2, 2, 4);
+plot(nx, Ex_cum, "b-o", "LineWidth", 2);
+plot(ny, Ey_cum, "r-s", "LineWidth", 2);
+xgrid(1, 1, 10);
+title("Cumulative Energy Profiles");
+xlabel("n"); ylabel("Cumulative Energy");
+legend(["Cumulative E_x(n)", "Cumulative E_y(n)"], opt=4);
+
+// Save figure
+xs2png(f, "ex6_linear_convolution.png");
+disp("Plot saved to ex6_linear_convolution.png");
+
+
+// ============================================================================
+// Exercise 7: Circular Discrete Convolution & Energy Analysis
+// ============================================================================
+clear;
+clc;
+close;
+
+disp("--- Exercise 7: Circular Convolution & Energy Analysis ---");
+
+// 1. Define given discrete-time signals (both length N = 5)
+x = [1, 2, -3, 2, 1];
+h = [1, 0, -1, -1, 1];
+N = 5;
+n_axis = 0:(N - 1);
+
+// ----------------------------------------------------------------------------
+// Method 1: Circular Folding and Shifting
+// y(n) = sum_{k=0}^{N-1} h(k) * x((n - k) mod N)
+// ----------------------------------------------------------------------------
+y_fold = zeros(1, N);
+for n = 0:(N - 1)
+    acc = 0;
+    for k = 0:(N - 1)
+        idx = pmodulo(n - k, N);
+        acc = acc + h(k + 1) * x(idx + 1);
+    end
+    y_fold(n + 1) = acc;
+end
+
+disp("y(n) using Circular Folding and Shifting method:");
+disp(y_fold);
+
+// ----------------------------------------------------------------------------
+// Method 2: Circulant Matrix Method
+// ----------------------------------------------------------------------------
+X_circ = zeros(N, N);
+for row = 0:(N - 1)
+    for col = 0:(N - 1)
+        idx = pmodulo(row - col, N);
+        X_circ(row + 1, col + 1) = x(idx + 1);
+    end
+end
+
+y_mat = (X_circ * (h(:)))';
+
+disp("Circulant Matrix X:");
+disp(X_circ);
+disp("y(n) using Circulant Matrix method:");
+disp(y_mat);
+
+// Verification using DFT / FFT property: y = ifft(fft(x) .* fft(h))
+y_fft = real(fft(fft(x, -1) .* fft(h, -1), 1));
+disp("Verification using FFT/IFFT property:");
+disp(round(y_fft * 1e4) / 1e4);
+
+// ----------------------------------------------------------------------------
+// Energy Calculation
+// ----------------------------------------------------------------------------
+Ex_total = sum(x .^ 2);
+Ey_total = sum(y_mat .^ 2);
+disp("Total Energy of x(n): " + string(Ex_total));
+disp("Total Energy of y(n): " + string(Ey_total));
+
+Ex_cum = cumsum(x .^ 2);
+Ey_cum = cumsum(y_mat .^ 2);
+
+// ----------------------------------------------------------------------------
+// Plotting: x(n), y(n) and Energy in the same figure
+// ----------------------------------------------------------------------------
+f = figure(4);
+clf(f);
+
+subplot(2, 2, 1);
+plot2d3(n_axis, x, 2);
+plot(n_axis, x, "b.");
+xgrid(1, 1, 10);
+title("Input Signal x(n) (Total Energy = " + string(Ex_total) + ")");
+xlabel("n"); ylabel("x(n)");
+
+subplot(2, 2, 2);
+plot2d3(n_axis, y_mat, 5);
+plot(n_axis, y_mat, "r.");
+xgrid(1, 1, 10);
+title("Circular Convolution y(n) (Total Energy = " + string(Ey_total) + ")");
+xlabel("n"); ylabel("y(n)");
+
+subplot(2, 2, 3);
+plot2d3(n_axis, x .^ 2, 2);
+plot(n_axis, x .^ 2, "b.");
+plot2d3(n_axis, y_mat .^ 2, 5);
+plot(n_axis, y_mat .^ 2, "r.");
+xgrid(1, 1, 10);
+title("Instantaneous Energy |x(n)|^2 and |y(n)|^2");
+xlabel("n"); ylabel("Energy");
+legend(["|x(n)|^2", "", "|y(n)|^2", ""], opt=1);
+
+subplot(2, 2, 4);
+plot(n_axis, Ex_cum, "b-o", "LineWidth", 2);
+plot(n_axis, Ey_cum, "r-s", "LineWidth", 2);
+xgrid(1, 1, 10);
+title("Cumulative Energy Profiles");
+xlabel("n"); ylabel("Cumulative Energy");
+legend(["Cumulative E_x(n)", "Cumulative E_y(n)"], opt=4);
+
+// Save figure
+xs2png(f, "ex7_circular_convolution.png");
+disp("Plot saved to ex7_circular_convolution.png");
